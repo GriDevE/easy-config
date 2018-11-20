@@ -13,24 +13,36 @@
 * В значениях ключей можно использовать  любые символы кроме последовательности символов комментария, символа присваивания, и управляющих символов. В том числе допустимо любое колличество пробелов, по краям значения пробелы обрежутся.
 
 ## Dependency  ##
-os
+os  
 re
 
 ## Requirements ##
-
-	python 3 и выше
-
+Python 3.0.0 и новее
 ## Installation ##
-
- 1)используя setup.py
-
- 2)вручную
- 
+Скопировать файл easyconfig.py в папку вашего проекта.
 ## Usage ##
+```python
+from easyconfig import CfgCreator
 
+# Инициализируем объект конфигурационного файла
+#  если файл существует - загрузит его
+#  если файла нет - не будет создаваться, только после добавления информации методом push() создаст файл
+config = CfgCreator("config.log")
+```
 ## Examples ##
 
+```python
+config = CfgCreator("config.log", "//")
 
+config.push(comment="комментарий")
 
+config.push("key", "value")
 
+config.push("key_1")
+
+config.push("key_2", "value", "комментарий 1")
+
+config.push("key_3", comment="комментарий 2")
+
+```
 
