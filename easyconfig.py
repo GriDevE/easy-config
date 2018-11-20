@@ -72,13 +72,16 @@ class CfgCreator:
 
 	_encoding_cfg = 'cp1251' # Используется эта кодировка, потому что она в windows(вплоть до windows 10) по умолчанию для текстовых файлов
 
-	_OK							= True   # всё прошло хорошо
+	# ничего не возвращает, если файла нет
+	_OK							= True   # всё прошло хорошо, файл загружен
 	_WAR_DUBLICATE				= False  # были дубликаты записей, удалены
 	_WAR_SYNTAX 				= False  # были исправлены ошибки синтаксиса в файле конфига
 	_WAR_INCORRECT_COMPLETION	= False  # программа некорректно завершилась в прошлый раз
 
 
 	_COMMENT = ""	# символ комментария
+
+	_ASSIGNED = ""
 
 	path  = ""		# путь к файлу конфига
 
@@ -90,10 +93,12 @@ class CfgCreator:
 	remove_spaces = True  # удалять последние пустые строки при добавлении новых записей
 
 
-	def __init__(self, path, comment = '--'):
+	def __init__(self, path, comment = "--", assigned = '=', encoding = 'cp1251'):
 
 		self.path = path
 		self._COMMENT = comment
+		self._ASSIGNED = assigned
+		self._encoding_cfg = encoding
 
 		self._OK = True		
 		self._WAR_DUBLICATE = False
@@ -306,8 +311,8 @@ class CfgCreator:
 
 	def delete_file(self):
 		self.data.clear()
-		self.keys.clear()
-		self.keys_push.clear()
+		del self.keys[:]  # - для совместимости с ранними версиями python. В python v3.3 появился метод clear у списков эквивалентный del list[:]
+		del self.keys_push[:]
 		if os.path.isfile(self.path) :
 			os.remove(self.path)
 		self._OK = True		
@@ -356,7 +361,7 @@ class CfgCreator:
 
 			name_ok = re.findall('^[a-zA-Zа-яА-ЯёЁ0-9_-]+$', name, flags=re.ASCII)
 
-			if (len(name)>0) and ( name_ok ) and (self._COMMENT not in name) and ('=' not in name) and (self._COMMENT not in value) and ('=' not in value) :
+			if (len(name)>0) and ( name_ok ) and (self._COMMENT not in name) and (self._ASSIGNED not in name) and (self._COMMENT not in value) and (self._ASSIGNED not in value) :
 
 				# добавляем, name в конфиг, обновляем значение
 
@@ -416,7 +421,7 @@ class CfgCreator:
 							
 							if b:
 								# нашли предположительно совпадающий ключ, проверяем что после него
-								jj = line.find('=')
+								jj = line.find(self._ASSIGNED)
 								if jj >= j+len(name) :
 									# проверяем нет ли до '=' символов кроме пробелов и '\t'
 									bb = True
@@ -631,7 +636,7 @@ class CfgCreator:
 					
 					if b:
 						# нашли предположительно совпадающий ключ, проверяем что после него
-						jj = line.find('=')
+						jj = line.find(self._ASSIGNED)
 						if jj >= j+len(name) :
 							# проверяем нет ли до '=' символов кроме пробелов и '\t'
 							bb = True
