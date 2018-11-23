@@ -2,17 +2,27 @@
 #                Примеры использования Easy Config
 #----------------------------------------------------------------#
 
-from easyconfig import CfgCreator
+from easyconfig import Cfg
 
 #----------------------------------------------------------------#
 
-if "\n" == None :
-	print("равен")
 
+config = Cfg("config.log", "//", '-:')
+if config.OK :
+	print("OK")
+elif config.WAR_FILE_NONE :
+	print("WAR_FILE_NONE")
+else:
+	if config.WAR_INCORRECT_COMPLETION :
+		print("WAR_INCORRECT_COMPLETION")
+	if config.WAR_FILE_EMPTY :
+		print("WAR_FILE_EMPTY")
+	elif config.WAR_DUBLICATE :
+		print("WAR_DUBLICATE")
+	if config.WAR_SYNTAX :
+		print("WAR_SYNTAX")
 
-config = CfgCreator("config.log", "//")
-
-# input("Создали конфиг config.log, но ключи не добавляли, соответственно файл не создался.")
+input("Создали конфиг config.log, но ключи не добавляли, соответственно файл не создался.")
 
 
 config.push(comment="комментарий")
@@ -26,7 +36,7 @@ config.push("key_2", "value", "комментарий 1")
 config.push("key_3", comment="комментарий 2")
 
 input("Добавили:\n просто комментарий,\n ключ и значение,\n просто ключ без значения,\n ключ значение и комментарий,\n ключ без значения и комментарий")
-
+print(config.get_keys())
 
 config.push("key", "36 %")
 
@@ -66,7 +76,7 @@ input("Удаляем ключи key и key_2.")
 
 # --------------
 
-config_2 = CfgCreator("config_2.log", "//")
+config_2 = Cfg("config_2.log", "//")
 
 config_2.push("key-1", "value key-1")
 
@@ -79,7 +89,7 @@ config_2.push("key-4", comment="комментарий key-4")
 input("Создали новый конфиг config_2.log, добавили несколько новых записей.")
 
 
-config_3 = CfgCreator("config_2.log", "//")
+config_3 = Cfg("config_2.log", "//")
 
 input("Создали другой объект конфига config_3, указав тот же файл config_2.log - информация из него загрузилась в config_3.")
 
@@ -92,4 +102,4 @@ input("Добавили в config_3 ключи key-2 и key-3, указав па
 
 config.delete_file()
 config_3.delete_file()
-input("Удалили конфиги файлы конфигов.")
+input("Очистили конфиги, удалили файлы конфигов.")
