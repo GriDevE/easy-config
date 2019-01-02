@@ -3,7 +3,7 @@
 #----------------------------------------------------------------#
 # 
 #                            МЕТОДЫ
-# file_sync()	- Загружает файл конфига(формируется структура данных data, keys), исправляет в нём обнаруженные ошибки синтаксиса(непонятные слова заменяются пробелами, дубликаты ключей удаляются по ходу чтения файла).
+# sync_file()	- Загружает файл конфига(формируется структура данных data, keys), исправляет в нём обнаруженные ошибки синтаксиса(непонятные слова заменяются пробелами, дубликаты ключей удаляются по ходу чтения файла).
 # 					Если у нас нет ключей которые есть в файле - ключи добавляются к нам в data и keys.
 # 					Если изменились значения ключей в файле - у нас значения обновляются(даже если в файле значение удалили - у нас удаляются).
 # 					Если в файле не обнаруживаются ключи которые мы назначали методом push (они хранятся в keys_push), то в файл эти ключи вносятся.
@@ -18,10 +18,10 @@
 # 												> Добавляет комментарий в файл конфига, после пары 'ключ = значение', либо просто(если передать только comment)
 # 													Если комментарий в файле уже есть после этой записи - оставляет его.
 #                                               > Обновляет ключ и значение в файле, если файла нет - создаёт и добавляет ключ и значение.
-# 													Внимание неочевидная вешь!, файл когда-то считывался методом load_file, и если от момента считывания до вызова push
+# 													Внимание неочевидная вешь!, файл когда-то считывался методом sync_file, и если от момента считывания до вызова push
 # 													там что-то изменилось, то это не учтётся в методе push, его поведение будет основываться на данных в буфере(data, keys) а не в файле,
 # 													и после того как он изменит ключ-значение в буфере, он попробует найти этот ключ в файле и обновить его, либо создаст новый если не найдёт.
-# 													Проверять полное сходство буфера и файла он не будет. Это контролируете вы сами, если файл изменяется из вне во время работы программы, на помощь методы load_file() и create_file().
+# 													Проверять полное сходство буфера и файла он не будет. Это контролируете вы сами, если файл изменяется из вне во время работы программы, на помощь методы sync_file() и create_file().
 # 
 # pop(name=None)								- Удаляет последнюю добавленную запись методом push (в файле может и не последней быть), либо ту которую укажем, полностью, в том числе и в файле строчку целиком с комментарием
 # push_list(name=None, value=None)				- ???????делаю????????Добавляет новую запись ключ-массив_значений в конфиг(либо обновляет значения если уже есть запись) после последней записи,
@@ -48,7 +48,7 @@
 #        > присутствует только name.tmp      - скрипт успел удалить старый name.log, только не успел переименовать name.tmp, переименовываем и всё ок, сообщаем что программа была прервана
 #        > name.tmp и name.log присутствуют  - скрипт возможно не успел дозаписать новую версию файла name.tmp, удаляем name.tmp, сообщаем что программа была прервана
 #  
-# * В конструктор передаётся путь к файлу конфига, если файл существует он загружается методом file_sync(),
+# * В конструктор передаётся путь к файлу конфига, если файл существует он загружается методом sync_file(),
 #    если файла нет, он создаётся при первом добавлении данных в конфиг.
 #
 #----------------------------------------------------------------#
@@ -65,7 +65,7 @@ class Cfg:
 	_keys = [] 		# list с ключами которые в файле, для того чтобы сохранять порядок ключей и первоначальный регистр символов
 	_keys_push = [] 	# list с ключами которые мы задали методом push, для того чтобы сохранять порядок ключей и первоначальный регистр символов
 
-	remove_spaces = True  # удалять последние пустые строки при добавлении новых записей
+	remove_spaces = True  # удалять последние пустые строки при изменении файла конфига
 
 	# Может быть OK=True либо WAR_FILE_NONE=True либо хотя бы один из оставшихся флагов(или несколько). 
 	# Если WAR_FILE_EMPTY=True то WAR_DUBLICATE=False.
@@ -81,7 +81,7 @@ class Cfg:
 		self._PATH = path 				# путь к файлу конфига
 		self._COMMENT = comment  		# обозначение комментария
 		self._ASSIGNED = assigned  		# обозначение присваивания
-		self._ENCODING = encoding 		# по умолчанию "cp1251" - потому что она в windows(вплоть до windows 10) по умолчанию для текстовых файлов
+		self._ENCODING = encoding 		# по умолчанию "cp1251" - в windows(вплоть до win 10) по умолчанию для текстовых файлов
 		
 		# Если не очистить, то в этих атрибутах остаются ссылки на объекты созданные в первом экземпляре класса
 		self._data.clear()
@@ -93,11 +93,14 @@ class Cfg:
 
 
 	# Синхронизируется с файлом конфига.
-	# Если fix_file=True - затирает ошибки синтаксиса в файле.
-	# Если add_keys=True - ключи добавленные методом push, если их небыло в файле - добавляет.
-	# Если del_keys=True - ключи в Cfg._keys не добавленные методом push и которых нет в файле - удаляет из объекта конфига.
-	# Если sync_keys=True - загружает ключи из файла в объект конфига.
-	def sync_file(self, fix_file = True, add_keys = True, del_keys = True, sync_keys = True):
+	# Если fix_file=True  - затирает ошибки синтаксиса в файле.
+	# Если push_keys_in_file=True  - ключи добавленные методом push, если их небыло в файле - добавляет.
+	# Если sync_keys=True  - обновляет в объекте ключи и располагает как в файле. 
+	#                      Ключи в _keys не добавленные методом push и которых нет в файле - удаляет из объекта конфига.
+	#                      Новые ключи добавляет вместе со значением независимо от параметра sync_value.
+	# Если sync_value=True  - обновляет в объекте значения ключей.
+
+	def sync_file(self, fix_file = True, push_keys_in_file = True, sync_keys = True, sync_value = True):
 
 		self.OK							= False
 		self.WAR_FILE_NONE				= False
@@ -142,7 +145,7 @@ class Cfg:
 			# затираем пробелами нераспознанный текст
 			# извлекаем ключи и значения
 			# новые ключи складываем в keys_name_lower, self._keys, self._keys_push, ключи и значения в self._data
-			# если ключ есть обновляем значение в self._data
+			# если ключ присутствует - обновляем значение в self._data
 
 			keys_name_lower = [] # все ключи которые найдём в файле кладём сюда в нижнем регистре
 			i = 0
@@ -175,93 +178,67 @@ class Cfg:
 				find_1_line = re.findall('^[\t\v ]*([a-zA-Zа-яА-ЯёЁ0-9_-]+)[\t\v ]*'+self._ASSIGNED+'\s*$', line, flags=re.ASCII)
 				#  name = value
 				find_2_line = re.findall('^[\t\v ]*([a-zA-Zа-яА-ЯёЁ0-9_-]+)\s*'+self._ASSIGNED+'[\t\v ]*([^\r\n\t\f\v=]+?)\s*$', line, flags=re.ASCII)
+				name = ''
+				value = ''
 				if (not find_1_line) and (not find_2_line) :
 					# заменяем из line все символы на пробелы кроме \n
-					bb = False
+					temp2 = len(line)
 					if '\n' in line :
-						for letter in range( len(line) - 1 ):
-							if line[letter] != ' ' :
-								line = line[:letter] + ' ' + line[letter+1:] # заменяем символ на пробел
-								bb = True
-					else:
-						for letter in range( len(line) ):
-							if line[letter] != ' ' :
-								line = line[:letter] + ' ' + line[letter+1:] # заменяем символ на пробел
-								bb = True
-					# статусы обновляем
-					if bb :
-						updated_file = True
+						temp2 -= 1
+					for letter in range( temp2 ):
+						if line[letter] != ' ' :
+							
+							self.WAR_SYNTAX = True
 
-						self.WAR_SYNTAX = True
+							if fix_file :
+								line = line[:letter] + ' ' + line[letter+1:] # заменяем символ на пробел
+								updated_file = True
 
 				elif find_1_line :
 					name = find_1_line[0]
-
-					keys_none = False
-
-					if name.lower() not in keys_name_lower :
-						keys_name_lower.append(name.lower())
-
-						if self._data.get( name.lower() ) == None :
-							# появился новый ключ
-							self._keys.append(name) 
-							self._data[name.lower()] = ''
-						else:
-							# обновляем значение
-							self._data[name.lower()] = ''
-							# обновляем имя ключа в списках, на случай если регистр символов изменили
-							ind = self.get_index(name, keys_push_index = True)
-							if ind is not None :
-								if ind[0] :
-									self._keys_push[ ind[1] ] = name
-									ind = self.get_index(name)
-									self._keys[ ind[1] ] = name
-								else:
-									self._keys[ ind[1] ] = name
-					else:
-						#удаляем дублирующуюся запись
-						if '\n' not in line :
-							line = ''
-						else:
-							line = '\n'
-
-						updated_file = True
-
-						self.WAR_DUBLICATE = True
 
 				elif find_2_line :
 					name = find_2_line[0][0]
 					value = find_2_line[0][1]
 
+				if name != '' :
+
 					keys_none = False
 
-					if name.lower() not in keys_name_lower :
-						keys_name_lower.append(name.lower())
+					name_lower = name.lower()
 
-						if self._data.get( name.lower() ) == None :
+					if name_lower not in keys_name_lower :
+
+						keys_name_lower.append( name_lower )
+
+						if self._data.get( name_lower ) == None :
 							# появился новый ключ
-							self._keys.append(name) 
-							self._data[name.lower()] = value
+							if sync_keys :
+								self._keys.append(name) 
+								self._data[name_lower] = value
 						else:
 							# обновляем значение
-							self._data[name.lower()] = value
+							if sync_value :
+								self._data[name_lower] = value
 							# обновляем имя ключа в списках, на случай если регистр символов изменили
-							ind = self.get_index(name, keys_push_index = True)
-							if ind is not None :
-								if ind[0] :
-									self._keys_push[ ind[1] ] = name
-									ind = self.get_index(name)
-									self._keys[ ind[1] ] = name
-								else:
-									self._keys[ ind[1] ] = name
+							if sync_keys :
+								ind = self.get_index(name, keys_push_index = True)
+								if ind is not None :
+									if ind[0] :
+										self._keys_push[ ind[1] ] = name
+										ind = self.get_index(name)
+										self._keys[ ind[1] ] = name
+									else:
+										self._keys[ ind[1] ] = name
 					else:
-						#удаляем дублирующуюся запись
-						if '\n' not in line :
-							line = ''
-						else:
-							line = '\n'	
+						# удаляем дублирующуюся запись
+						if fix_file :
+							if '\n' not in line :
+								line = ''
+							else:
+								line = '\n'
 
-						updated_file = True
+							updated_file = True
 
 						self.WAR_DUBLICATE = True			
 
@@ -275,19 +252,35 @@ class Cfg:
 				self.WAR_FILE_EMPTY = True
 
 			# Добавляем в файл ключи из _keys_push которых нет в файле
-			for k in self._keys_push :
-				if k.lower() not in keys_name_lower:
-					# Добавляем
-					if (self._data[k.lower()] == None) or (self._data[k.lower()] == ''):
-						lines.append(k+' = \n')
-					else:
-						lines.append(k+' = '+self._data[k.lower()] + '\n')
+			if push_keys_in_file :
+				for k in self._keys_push :
+					if k.lower() not in keys_name_lower:
+						# Добавляем
+						if (self._data[k.lower()] == None) or (self._data[k.lower()] == ''):
+							lines.append(k+' = \n')
+						else:
+							lines.append(k+' = '+self._data[k.lower()] + '\n')
+						updated_file = True
+			
+			if sync_keys :
+				# Удаляем ключи из _keys которых нет в файле и в _keys_push
+				keys_copy = list(self._keys)  # потому что, нельзя перебирать и изменять список одновременно
+				for k in keys_copy :
+					ind = self.get_index(k)
+					if (k.lower() not in keys_name_lower) and (ind[0] == False):
+						# Удаляем ключ
+						del self._keys[ ind[1] ]
+						self._data.pop( k.lower() )
 
-			# Удаляем ключи из _keys которых нет в файле и в _keys_push
-			for k in self._keys :
-				if (k.lower() not in keys_name_lower) and (k.lower() not in self._keys_push):
-					# Удаляем ключ
-					pop(k)
+				# Обновляем порядок расположения ключей в _keys, как в файле
+				del keys_copy[:]
+				for k in keys_name_lower :
+					ind = self.get_index(k)
+					if ind is not None :
+						keys_copy.append(self._keys[ ind[1] ])
+				del self._keys[:]
+				self._keys = keys_copy
+
 
 			if updated_file:
 				# записываем в копию сначала
@@ -300,8 +293,7 @@ class Cfg:
 
 		else:
 			self.WAR_FILE_NONE = True
-			# маловероятно, но это может случится
-			if self.WAR_INCORRECT_COMPLETION :
+			if self.WAR_INCORRECT_COMPLETION : # маловероятно, но это может случится
 				print("error - не найден файл который только что переименовывали ", self._PATH)
 				input("Нажмите Enter чтобы закрыть приложение:")
 				quit()
@@ -423,200 +415,257 @@ class Cfg:
 
 	# Очищает конфиг, удаляет файл
 
-	def delete_file(self):
+	def clear(self, delete_file = True):
 		self._data.clear()
 		del self._keys[:]  # - для совместимости с ранними версиями python. В python v3.3 появился метод clear у списков эквивалентный del list[:]
 		del self._keys_push[:]
-		if os.path.isfile(self._PATH) :
-			self.remove(self._PATH)
+		if delete_file :
+			if os.path.isfile(self._PATH) :
+				self.remove(self._PATH)
 		self.OK = True		
 		self.WAR_DUBLICATE = False
 		self.WAR_SYNTAX = False
 		self.WAR_INCORRECT_COMPLETION = False
 
 
-	# Добавляет новую запись ключ-значение в конфиг(либо обновляет value если уже есть запись) после последней записи(поэтому назван push), обновляет в файле, если файла нет - создаёт
+	# > Добавляет новую запись ключ-значение в объект конфига(либо обновляет value, если уже есть ключ) после последней записи(поэтому назван push), обновляет в файле, если файла нет - создаёт
+	# 	Внимание неочевидная вешь!, файл когда-то считывался методом sync_file, и если от момента считывания до вызова push
+	# 	там что-то изменилось, то это не учтётся в методе push, его поведение будет основываться на данных в буфере(data, keys) а не в файле,
+	# 	и после того как он изменит ключ-значение в буфере, он попробует найти этот ключ в файле и обновит первый попавшийся ключ, либо создаст новый в конце файла если не найдёт.
+	# 	Проверять полное сходство буфера и файла он не будет. Это контролируете вы сами используя метод sync_file(), если файл изменяется во время работы программы.
+	# > Добавляет комментарий в файл конфига, после пары 'ключ = значение', либо отдельный комментарий(если передать только comment)
+	# 	Если это отдельный комментарий(не передали ключ) - создаёт комментарий на новой строчке, иначе действует в соответствии с параметром comment_refresh.
+	# Если value_refresh=True   - создаёт новый ключ либо обновляет значение(если ключ уже есть).
+	# Если value_refresh=False  - создаёт новый ключ либо обновляет значение(если ключ уже есть), только если у него пустое значение "".
+	# Если comment_refresh=True   - создаёт комментарий после ключа, если уже есть - обновляет.
+	# Если comment_refresh=False  - создаёт комментарий после ключа, если уже есть - не трогает.
+	# file_mod  - изменять или не изменять записи в файле.
 
-	def push(self, name=None, value=None, comment = None, value_refresh=True):
+	def push(self, name=None, value=None, comment = None, value_refresh=True, comment_refresh=True, file_mod = True):
 
-		if ((name == None) and (comment == None)) or ((name == None) and (value != None) and (comment != None)):
-			return
+		if name is None :
+			if (comment is not None) and file_mod :
 
-		if (name == None) and (value == None) and (comment != None):
-			# вставляем комментарий в файл, если файла нет - создаём
-			if os.path.isfile(self._PATH):
-				# читаем весь файл
-				with open(self._PATH,  mode='r', encoding=self._ENCODING) as f:
-					lines = f.readlines() 
-				# добавляем комментарий в последнюю строчку
-				if comment.isspace() or comment=='': #если комментарий пустой - просто добавляем пустую строчку без символа комментария
-					lines.append('\n')
-				else:
-					lines.append(self._COMMENT+comment+'\n')
-
-				# записываем в копию сначала
-				with open(self._PATH+'.tmp',  mode='w', encoding=self._ENCODING) as f:
-					f.writelines(lines)
-				# удаляем старый файл
-				self.remove(self._PATH)
-				# переименовываем копию
-				self.rename(self._PATH+'.tmp', self._PATH)
-			else: 
-				# создаём файл, добавляем комментарий
-				with open(self._PATH,  mode='w', encoding=self._ENCODING) as f:
-					if comment.isspace() or comment=='': #если комментарий пустой - просто добавляем пустую строчку без символа комментария
-						f.writelines('\n')
-					else:
-						f.writelines(self._COMMENT+comment+'\n')
-		else:
-
-			if value == None:
-				value = ''
-
-			name_ok = re.findall('^[a-zA-Zа-яА-ЯёЁ0-9_-]+$', name, flags=re.ASCII)
-
-			if ( (len(name)>0) and ( name_ok ) 
-					and (self._COMMENT not in name) 
-					and (self._ASSIGNED not in name) 
-					and (self._COMMENT not in value) 
-					and (self._ASSIGNED not in value) ) :
-
-				# добавляем, name в конфиг, обновляем значение
-
-				if self._data.get( name.lower() ) == None:
-					self._keys.append(name) # появился новый ключ
-					self._keys_push.append(name) # ключ который добавили мы
-					self._data[name.lower()] = value
-				else:
-					b = False
-					for n in self._keys_push:
-						if name.lower() == n.lower():
-							b = True
-							break
-					if b == False:
-						self._keys_push.append(name)
-				
-					if value_refresh:
-						self._data[name.lower()] = value
-					else:
-						# оставляем запись, которая была, в приоритете
-						if (self._data[name.lower()] == None) or (self._data[name.lower()] == ''):
-							self._data[name.lower()] = value
-
-				# обновляем записи в файле, если файла нет - создаём
+				# вставляем комментарий в файл, если файла нет - создаём
 				if os.path.isfile(self._PATH):
 					# читаем весь файл
 					with open(self._PATH,  mode='r', encoding=self._ENCODING) as f:
 						lines = f.readlines() 
-					
-					updated_file = False
-					updated_value = False
-
-					# удаляем последние пустые строки, если нет в последней строке '\n' - добавляем
-					if self.remove_spaces:
-						updated_file = updated_file or self._delete_empty_end(lines)
+					# добавляем комментарий в последнюю строчку
+					if comment=='': # если комментарий пустой - просто добавляем пустую строчку без символа комментария
+						lines.append('\n')
 					else:
-						if len(lines) > 0 :
-							if '\n' not in lines[-1] :
-								lines[-1] += '\n'
-								updated_file = True
-					
-					# ищем ключ в файле который совпадает с нашим, обновляем значение и комментарий
-					i = 0
-					while True:
-						if i >= len(lines) :
-							break
-						line = lines[i].lower()
-						
-						j = line.find( name.lower() )
-						if j>=0 :
-							# проверяем, нет ли до name символов кроме пробелов и '\t'
-							b = True
-							for k in range(j):
-								if (line[k] != ' ') and (line[k] != '\t') :
-									b = False # попался какой то символ
-									break
-							
-							if b:
-								# нашли предположительно совпадающий ключ, проверяем что после него
-								jj = line.find(self._ASSIGNED)
-								if jj >= j+len(name) :
-									# проверяем нет ли до '=' символов кроме пробелов и '\t'
-									bb = True
-									for kk in range(j+len(name), jj):
-										if (line[kk] != ' ') and (line[kk] != '\t') :
-											bb = False # попался какой-то символ
+						lines.append(self._COMMENT+comment+'\n')
 
-									if bb:
-										# теперь смотрим что после '=', удаляем всё до возможного символа комментария, подставляем value 
-										jjj = line.find(self._COMMENT)
-										if jjj >= jj+len(self._ASSIGNED) :
-											# обновляем value, сохраняем пробелы после него и комментарий который был
-											comment_in_file = ''
-											for letter in range(jjj-1, jj+len(self._ASSIGNED), -1) :
-												if (lines[i][letter] == ' ') or (lines[i][letter] == '\t') or (lines[i][letter] == '\v') :
-													comment_in_file += lines[i][letter]
-												else:
-													break
-											comment_in_file = comment_in_file[::-1]
-
-											lines[i] = lines[i][:jj+len(self._ASSIGNED)] + ' '+self._data[name.lower()] + comment_in_file+lines[i][jjj:]
-
-										else:
-											# стираем всё после '=', обновляем value
-											lines[i] = lines[i][:jj+len(self._ASSIGNED)] + ' '+self._data[name.lower()]
-											# добавляем комментарий, если есть
-											if (comment != None) and (comment != '') :
-												lines[i] += "  "+self._COMMENT+comment
-											lines[i] += '\n'											
-
-										updated_value = True
-										updated_file = True
-										break
-						i += 1
-
-					# Если не обновили в файле уже стоящий ключ - не обновили потому что не нашли,
-					#  значит добавляем новую запись
-					if updated_value == False :
-
-						if (self._data[name.lower()] == None) or (self._data[name.lower()] == ''):
-							lines.append(name+' '+self._ASSIGNED+' ')
-						else:
-							lines.append(name+' '+self._ASSIGNED+' '+self._data[name.lower()])
-
-						# добавляем комментарий, если есть
-						if comment != None :
-							lines[-1] += "  "+self._COMMENT+comment
-
-						lines[i] += '\n'
-
-						updated_file = True
-
-
-					if updated_file :
-						# записываем в копию сначала
-						with open(self._PATH+'.tmp',  mode='w', encoding=self._ENCODING) as f:
-							f.writelines(lines)
-						# удаляем старый файл
-						self.remove(self._PATH)
-						# переименовываем копию
-						self.rename(self._PATH+'.tmp', self._PATH)
-
-				else: 
-
-					lines = self._create_list()
-
-					# коммент добавляем
-					if comment != None :
-						lines[-1] = lines[-1][:len(lines[-1])-1] + '  ' + self._COMMENT + comment + '\n'
-
-					# создаёт файл, если есть - заменяет
-					with open(self._PATH,  mode='w', encoding=self._ENCODING) as f:
+					# записываем в копию сначала
+					with open(self._PATH+'.tmp',  mode='w', encoding=self._ENCODING) as f:
 						f.writelines(lines)
+					# удаляем старый файл
+					self.remove(self._PATH)
+					# переименовываем копию
+					self.rename(self._PATH+'.tmp', self._PATH)
+				else: 
+					# создаём файл, добавляем комментарий
+					with open(self._PATH,  mode='w', encoding=self._ENCODING) as f:
+						if comment.isspace() or comment=='': # если комментарий пустой - просто добавляем пустую строчку без символа комментария
+							f.writelines('\n')
+						else:
+							f.writelines(self._COMMENT+comment+'\n')
+		else:
+			# проверяем name и value
+
+			if value is None :
+				if self._data.get( name.lower() ) is None :
+					value = ""
+				else:
+					value = self._data[name.lower()]
+			else:
+				if self.str_isspace(value) :  # если value == None или пробельные символы - вернёт True
+					value = ""
+
+			name_ok = re.findall('^[a-zA-Zа-яА-ЯёЁ0-9_-]+$', name, flags=re.ASCII)
+
+			if ( (len(name)>0) and ( name_ok ) 
+				and (self._COMMENT not in name) 
+				and (self._ASSIGNED not in name) 
+				and (self._COMMENT not in value) 
+				and (self._ASSIGNED not in value) ) :
+
+				# обновляет в файле значение ключа, если ключ не найден - добавляет его в конец файла, 
+				# если файла нет - создаёт файл и добавляет только то что передали в эту функцию.
+				def update_key_in_file(key, val, comm = None):
+					
+					if os.path.isfile(self._PATH):
+						# читаем весь файл
+						with open(self._PATH,  mode='r', encoding=self._ENCODING) as f:
+							lines = f.readlines() 
+						
+						updated_file = False
+						updated_value = False
+
+						# удаляем последние пустые строки, если нет в последней строке '\n' - добавляем
+						if self.remove_spaces:
+							self._delete_empty_end(lines)
+							# updated_file = updated_file or self._delete_empty_end(lines)
+						else:
+							if len(lines) > 0 :
+								if '\n' not in lines[-1] :
+									lines[-1] += '\n'
+									# updated_file = True
+						
+						# ищем ключ в файле который совпадает с нашим, обновляем значение и комментарий
+						i = 0
+						while True:
+							if i >= len(lines) :
+								break
+							line = lines[i].lower()
+							
+							j = line.find( key.lower() )
+							if j>=0 :
+								# проверяем, нет ли до key символов кроме пробелов и '\t'
+								b = True
+								for k in range(j):
+									if (line[k] != ' ') and (line[k] != '\t') :
+										b = False # попался какой то символ
+										break
+								
+								if b:
+									# проверяем что после имени ключа
+									jj = line.find(self._ASSIGNED)
+									if jj >= j+len(key) :
+										# проверяем нет ли до '=' символов кроме пробелов и '\t'
+										bb = True
+										for kk in range(j+len(key), jj):
+											if (line[kk] != ' ') and (line[kk] != '\t') :
+												bb = False # попался какой-то символ
+
+										if bb:
+											# теперь смотрим что после '=', удаляем всё до возможного символа комментария, подставляем value 
+											jjj = line.find(self._COMMENT)
+											if jjj >= jj+len(self._ASSIGNED) :
+												# обновляем value, сохраняем пробелы после него и комментарий который был
+												comment_in_file = ''
+												for letter in range(jjj-1, jj+len(self._ASSIGNED), -1) :
+													if (lines[i][letter] == ' ') or (lines[i][letter] == '\t') or (lines[i][letter] == '\v') :
+														comment_in_file += lines[i][letter]
+													else:
+														break
+												comment_in_file = comment_in_file[::-1]
+
+												lines[i] = lines[i][:j] + key + lines[i][j+len(key):jj+len(self._ASSIGNED)] + ' '+self._data[key.lower()] + comment_in_file+lines[i][jjj:]
+
+											else:
+												# стираем всё после '=', обновляем value
+												if (val == None) or (val == ''):
+													lines[i] = lines[i][:j] + key + lines[i][j+len(key):jj+len(self._ASSIGNED)] + ' '
+													if (comm != None) and (comm != '') :
+														lines[i] += " "+self._COMMENT + comm
+												else:
+													lines[i] = lines[i][:j] + key + lines[i][j+len(key):jj+len(self._ASSIGNED)] + ' ' + val
+													if (comm != None) and (comm != '') :
+														lines[i] += "  "+self._COMMENT + comm
+												lines[i] += '\n'											
+
+											updated_value = True
+											updated_file = True
+											break
+							i += 1
+
+						# Если не нашли ключ в файле - добавляем ключ в конец файла
+						if updated_value == False :
+
+							if (val == None) or (val == ''):
+								lines.append(key+' '+self._ASSIGNED+' ')
+								if (comm != None) and (comm != '') :
+									lines[-1] += " "+self._COMMENT + comm
+							else:
+								lines.append(key+' '+self._ASSIGNED+' '+val)
+								if (comm != None) and (comm != '') :
+									lines[-1] += "  "+self._COMMENT + comm
+							lines[i] += '\n'
+
+							updated_file = True
+
+
+						if updated_file :
+							# записываем в копию сначала
+							with open(self._PATH+'.tmp',  mode='w', encoding=self._ENCODING) as f:
+								f.writelines(lines)
+							# удаляем старый файл
+							self.remove(self._PATH)
+							# переименовываем копию
+							self.rename(self._PATH+'.tmp', self._PATH)
+
+					else: 
+						# файла нет - создаём файл, добавляем указанный ключ, значение и комментарий
+						
+						lines = [key+' '+self._ASSIGNED+' '+val]
+
+						# коммент добавляем
+						if comm is not None :
+							lines[0] += '  ' + self._COMMENT + comm
+
+						lines[0] += '\n'
+
+						# создаёт файл, если есть - заменяет
+						with open(self._PATH,  mode='w', encoding=self._ENCODING) as f:
+							f.writelines(lines)
+				
+				# обновляем имя ключа в списке если найден, иначе добавляем
+				def name_refresh(t_name, t_keys):
+					b = False
+					i = 0
+					for n in t_keys:
+						if t_name.lower() == n.lower():
+							b = True
+							t_keys[i] = t_name
+							break
+						i += 1
+					if b == False:
+						t_keys.append(t_name)
+
+
+				if self._data.get( name.lower() ) is None :
+					self._keys.append(name)  # добавляем новый ключ
+					self._keys_push.append(name)  # значит этот ключ добавили мы
+					self._data[name.lower()] = value
+
+					# обновляем этот ключ в файле и комментарий
+					if file_mod :
+						update_key_in_file(name, value, comment)
+
+				elif self._data.get( name.lower() ) != "" : # если в объекте найден ключ с не пустым значением
+					
+					# обновляем имя ключа, чтобы регистр сохранить
+					name_refresh(name, self._keys)
+					# и в keys_push
+					name_refresh(name, self._keys_push)
+					
+					if value_refresh:
+						self._data[name.lower()] = value
+						# обновляем этот ключ в файле и комментарий
+						if file_mod :
+							update_key_in_file(name, value, comment)
+					else:
+						# обновляем этот ключ в файле и комментарий, значение оставляем какое было
+						if file_mod :
+							update_key_in_file(name, self._data[name.lower()], comment)
+
+				else: # если в объекте найден ключ с пустым '' значением
+					
+					# обновляем имя ключа, чтобы регистр сохранить
+					name_refresh(name, self._keys)
+					# и в keys_push
+					name_refresh(name, self._keys_push)
+
+					self._data[name.lower()] = value
+
+					if file_mod :
+						update_key_in_file(name, value, comment)
 
 			else:
-				print('error: name in push()')
-				quit()
+				print("error push() - передано недопустимое имя ключа или значение: ", name, ' '+self._ASSIGNED+' ', value)
+				return
 
 
 	# Удаляет ключ(и значение соответственно) из объекта конфига и из файла сколько найдёт.
@@ -626,8 +675,10 @@ class Cfg:
 	# Если name = "name"
 	#   Удаляет указанную запись, добавленную методом push или из файла.
 	# 	Возвращает колличество оставшихся записей добавленных методом push и полученных из файла.
+	# Если file = True
+	#   Удалит не только в объекте но и в файле.
 
-	def pop(self, name=None):
+	def pop(self, name=None, file = True):
 
 		if name is None :
 
@@ -636,7 +687,7 @@ class Cfg:
 				key = self._keys_push.pop()
 
 				if key.lower() not in self._data:
-					raise IOError("data не содержит всё подмножество ключей keys, такое недопустимо, вы неправильно изменили данные, используйте предоставленные функции для этого.")
+					raise IOError("_data не содержит всё подмножество ключей _keys, такое недопустимо, вы неправильно изменили данные, используйте предоставленные функции для этого.")
 
 				self._data.pop( key.lower() )
 
@@ -644,10 +695,11 @@ class Cfg:
 				length = self.delete_key(key, self._keys)
 
 				if length_0 == length :
-					raise IOError("keys не содержит всё подмножество ключей keys_push, такое недопустимо, вы неправильно изменили данные, используйте предоставленные функции для этого.")
-
+					raise IOError("_keys не содержит всё подмножество ключей _keys_push, такое недопустимо, вы неправильно изменили данные, используйте предоставленные функции для этого.")
+				
 				# теперь в файле
-				self._delete_key_in_file(key)
+				if file :
+					self._delete_key_in_file(key)
 
 			return length
 
@@ -661,12 +713,14 @@ class Cfg:
 				self.delete_key(name, self._keys_push)
 
 				if name.lower() not in self._data:
-					raise IOError("data не содержит всё подмножество ключей keys, такое недопустимо, вы неправильно изменили данные, используйте предоставленные функции для этого.")
+					raise IOError("_data не содержит всё подмножество ключей _keys, такое недопустимо, вы неправильно изменили данные, используйте предоставленные функции для этого.")
+
 
 				self._data.pop( name.lower() )
 
 				# теперь в файле
-				self._delete_key_in_file(name)
+				if file :
+					self._delete_key_in_file(name)
 
 			return length
 
@@ -721,7 +775,7 @@ class Cfg:
 				input("Нажмите Enter чтобы повторить попытку:")
 
 
-	# Удаляет указанный ключ без учёта регистра; все совпадения удаляет.
+	# Удаляет указанный ключ(в списке keys) без учёта регистра; все совпадения удаляет.
 	# Возвращает количество оставшихся ключей.
 	@staticmethod
 	def delete_key(key, keys):
@@ -733,7 +787,7 @@ class Cfg:
 
 		while key in keys_lower :
 			i = keys_lower.index(key)
-			keys.pop( i )
+			del keys[i]
 			del keys_lower[i]
 
 		return len(keys)
@@ -768,7 +822,6 @@ class Cfg:
 						lines[-1] += '\n'
 						b = True
 					break
-
 		return b
 
 
@@ -829,7 +882,7 @@ class Cfg:
 									lines[i] = lines[i][jjj:]
 								else:
 									# удаляем всю строчку
-									lines.pop(i)
+									del lines[i]
 																			
 								updated_file = True
 								break
@@ -880,16 +933,16 @@ class Cfg:
 		return lines
 
 
+	# Проверяет из пробельных символов ли строка
+	# " ", "\t", "", None  - вернёт True
+	@staticmethod
+	def str_isspace(st):
+		if st == '' :
+			return True
+		if st is not None :
+			for s in st :
+				if (s != '\t') and (s != ' ') :
+					return False
+		return True
+
 #----------------------------------------------------------------#
-
-
-
-	# if config.OK == False:
-	# 	print('config.WAR_INCORRECT_COMPLETION = '+str(config.WAR_INCORRECT_COMPLETION))	
-	# 	print('config.WAR_DUBLICATE = '+str(config.WAR_DUBLICATE))
-	# 	print('config.WAR_SYNTAX = '+str(config.WAR_SYNTAX))	
-
-	# if ((config.WAR_INCORRECT_COMPLETION == True) or (config.WAR_DUBLICATE == True) or (config.WAR_SYNTAX==True)) and (config.OK == True):
-	# 	print('БЯКА СО СТАТУСАМИ')
-	# print('config.count  = '+str(len(config._keys)))
-	
