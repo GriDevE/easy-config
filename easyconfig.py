@@ -65,7 +65,7 @@ class Cfg:
 	_keys = [] 		# list с ключами которые в файле, для того чтобы сохранять порядок ключей и первоначальный регистр символов
 	_keys_push = [] 	# list с ключами которые мы задали методом push, для того чтобы сохранять порядок ключей и первоначальный регистр символов
 
-	remove_spaces = True  # удалять последние пустые строки при изменении файла конфига
+	remove_spaces = False  # удалять последние пустые строки при изменении файла конфига
 
 	# Может быть OK=True либо WAR_FILE_NONE=True либо хотя бы один из оставшихся флагов(или несколько). 
 	# Если WAR_FILE_EMPTY=True то WAR_DUBLICATE=False.
@@ -308,20 +308,14 @@ class Cfg:
 	
 	# Можно переопределить атрибуты _PATH, _COMMENT, _ASSIGNED, _ENCODING.
 	def set_options(self, path = None, comment = None, assigned = None, encoding = None):
-		b = False
 		if path is not None :
 			self._PATH = path
-			b = True
 		if comment is not None :
 			self._COMMENT = comment
-			b = True
 		if assigned is not None :
 			self._ASSIGNED = assigned
-			b = True
 		if encoding is not None :
 			self._ENCODING = encoding
-			b = True
-		return b
 
 
 	# Получить колличество ключей
@@ -394,7 +388,7 @@ class Cfg:
 	# Создаёт файл конфига с заменой, переносит туда все данные которые добавлены программно, удаляет все ключи которые добавлены только из файла
 	#  если файл есть и данные есть - создаёт файл с заменой, записывает данные
 	#  если файл есть а данных нет - удаляет файл
-	#  если файла нет и данных нет - ничего не делаем, только ключи чистим
+	#  если файла нет и данных нет - ничего не делает, только ключи чистит
 	def create_file(self):
 
 		lines = self._create_list()  # удаляет ключи которые добавленны не программно
@@ -428,11 +422,11 @@ class Cfg:
 		self.WAR_INCORRECT_COMPLETION = False
 
 
-	# > Добавляет новую запись ключ-значение в объект конфига(либо обновляет value, если уже есть ключ) после последней записи(поэтому назван push), обновляет в файле, если файла нет - создаёт
-	# 	Внимание неочевидная вешь!, файл когда-то считывался методом sync_file, и если от момента считывания до вызова push
+	# > Добавляет новую запись ключ-значение в объект конфига(либо обновляет value, если уже есть ключ) после последней записи(поэтому назван push), обновляет в файле, если файла нет - создаёт.
+	# 	Неочевидный момент!, файл когда-то считывался методом sync_file, и если от момента считывания до вызова push
 	# 	там что-то изменилось, то это не учтётся в методе push, его поведение будет основываться на данных в буфере(data, keys) а не в файле,
-	# 	и после того как он изменит ключ-значение в буфере, он попробует найти этот ключ в файле и обновит первый попавшийся ключ, либо создаст новый в конце файла если не найдёт.
-	# 	Проверять полное сходство буфера и файла он не будет. Это контролируете вы сами используя метод sync_file(), если файл изменяется во время работы программы.
+	# 	и после того как он изменит ключ-значение в буфере, он попробует найти этот ключ в файле и обновит первый попавшийся ключ, если не найдёт - создаст новый в конце файла.
+	# 	Проверять полное сходство буфера и файла он не будет. Это контролируете вы сами используя метод sync_file(), если файл изменяется из вне во время работы программы.
 	# > Добавляет комментарий в файл конфига, после пары 'ключ = значение', либо отдельный комментарий(если передать только comment)
 	# 	Если это отдельный комментарий(не передали ключ) - создаёт комментарий на новой строчке, иначе действует в соответствии с параметром comment_refresh.
 	# Если value_refresh=True   - создаёт новый ключ либо обновляет значение(если ключ уже есть).
@@ -625,10 +619,20 @@ class Cfg:
 						t_keys.append(t_name)
 
 
+				# обрезаем пробельные символы по краям значения
+				value_no_spaces = ""
+				for i in range(len(value)) :
+					if (value[i] != '\t') and (value[i] != '\v') and (value[i] != ' '):
+						for j in range(len(value)-1, -1, -1):
+							if (value[j] != '\t') and (value[j] != '\v') and (value[j] != ' '):
+								value_no_spaces = value[i:j+1]
+								break
+						break
+
 				if self._data.get( name.lower() ) is None :
 					self._keys.append(name)  # добавляем новый ключ
 					self._keys_push.append(name)  # значит этот ключ добавили мы
-					self._data[name.lower()] = value
+					self._data[name.lower()] = value_no_spaces
 
 					# обновляем этот ключ в файле и комментарий
 					if file_mod :
@@ -642,7 +646,7 @@ class Cfg:
 					name_refresh(name, self._keys_push)
 					
 					if value_refresh:
-						self._data[name.lower()] = value
+						self._data[name.lower()] = value_no_spaces
 						# обновляем этот ключ в файле и комментарий
 						if file_mod :
 							update_key_in_file(name, value, comment)
@@ -658,7 +662,7 @@ class Cfg:
 					# и в keys_push
 					name_refresh(name, self._keys_push)
 
-					self._data[name.lower()] = value
+					self._data[name.lower()] = value_no_spaces
 
 					if file_mod :
 						update_key_in_file(name, value, comment)
@@ -682,7 +686,9 @@ class Cfg:
 
 		if name is None :
 
-			if len(self._keys_push) > 0 :
+			length = len(self._keys_push)
+
+			if length > 0 :
 
 				key = self._keys_push.pop()
 
@@ -692,16 +698,16 @@ class Cfg:
 				self._data.pop( key.lower() )
 
 				length_0 = len(self._keys)
-				length = self.delete_key(key, self._keys)
+				length_1 = self.delete_key(key, self._keys)
 
-				if length_0 == length :
+				if length_0 == length_1 :
 					raise IOError("_keys не содержит всё подмножество ключей _keys_push, такое недопустимо, вы неправильно изменили данные, используйте предоставленные функции для этого.")
 				
 				# теперь в файле
 				if file :
 					self._delete_key_in_file(key)
 
-			return length
+			return len(self._keys_push)
 
 		else:
 
@@ -825,9 +831,7 @@ class Cfg:
 		return b
 
 
-	# удаляет ключ в файле, оставляя комментарий
-	# ????????Сделать чтобы удалял все вхождения ключей в файл
-
+	# удаляет ключ в файле, все совпадения, не трогает комментарий
 	def _delete_key_in_file(self, name):
 		
 		# Удаляем ключ в файле
@@ -883,9 +887,10 @@ class Cfg:
 								else:
 									# удаляем всю строчку
 									del lines[i]
+									i -= 1
 																			
 								updated_file = True
-								break
+								# break - делаем чтобы все вхождения ключа удалил
 				i += 1
 
 
@@ -900,7 +905,6 @@ class Cfg:
 
 
 	# возвращает список ключей которые были созданы программно(а не из прочитанного файла), удаляет все ключи которые были загружены из файла
-
 	def _create_list(self):
 
 		# добавляем все записи
@@ -933,7 +937,7 @@ class Cfg:
 		return lines
 
 
-	# Проверяет из пробельных символов ли строка
+	# Проверяет, из пробельных символов ли строка
 	# " ", "\t", "", None  - вернёт True
 	@staticmethod
 	def str_isspace(st):
