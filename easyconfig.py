@@ -76,7 +76,7 @@ class Cfg:
 	WAR_DUBLICATE				= False  # файл прочитан, были дубликаты ключей, дубликаты удалены
 	WAR_SYNTAX 					= False  # файл прочитан, был затёрт нераспознанный текст в файле
 
-	def __init__(self, path, comment = "--", assigned = "=", encoding = 'cp1251'):
+	def __init__(self, path, comment = "--", assigned = "=", encoding = "cp1251"):
 
 		self._PATH = path 				# путь к файлу конфига
 		self._COMMENT = comment  		# обозначение комментария
