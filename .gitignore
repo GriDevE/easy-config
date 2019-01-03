@@ -1,0 +1,4 @@
+*.log
+*.pyc
+easyconfig.pyc
+__pycache__
