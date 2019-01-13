@@ -46,22 +46,22 @@ config = Cfg("config.log", comment = "//", assigned = ":", encoding="utf-8")
 
 Статус объекта конфига после инициализации можно посмотреть так:
 ```python
-if config.OK :
+if config.WAR_OK :
 	print("OK")
 elif config.WAR_FILE_NONE :
-	print("WAR_FILE_NONE")
+	print("FILE_NONE")
 else:
 	if config.WAR_INCORRECT_COMPLETION :
-		print("WAR_INCORRECT_COMPLETION")
+		print("INCORRECT_COMPLETION")
 	if config.WAR_FILE_EMPTY :
-		print("WAR_FILE_EMPTY")
+		print("FILE_EMPTY")
 	elif config.WAR_DUBLICATE :
-		print("WAR_DUBLICATE")
+		print("DUBLICATE")
 	if config.WAR_SYNTAX :
-		print("WAR_SYNTAX")
+		print("SYNTAX")
 ```
 Статус обновляется после инициализации объекта конфига и после вызова функции `sync_file()`.  
-`OK` – успешно загружены данные из файла.  
+`WAR_OK` – успешно загружены данные из файла.  
 `WAR_FILE_NONE` – файла нет.  
 `WAR_INCORRECT_COMPLETION` – программа внезапно завершилась во время записи в прошлый раз.  
 `WAR_FILE_EMPTY` – файл прочитан, но не найден ни один ключ.  
@@ -72,9 +72,9 @@ else:
 ```python
 Cfg.sync_file(fix_file = True, push_keys_in_file = True, sync_keys = True, sync_value = True)
 ```
-Синхронизирует объект конфига с файлом конфига.
+Синхронизирует данные между объектом конфига и файлом конфига.
 * _если `fix_file=True` – затирает ошибки синтаксиса в файле._
-* _если `push_keys_in_file=True` – ключи добавленные методом `push`, если их небыло в файле - добавляет._
+* _если `push_keys_in_file=True` – ключи добавленные методом `push`, если их нет в файле - добавляет._
 * _если `sync_keys=True` – обновляет в объекте ключи и располагает как в файле._
   * _Ключи не добавленные методом `push`(которые были загружены из файла когда-то) и которых нет сейчас в файле – удаляет из объекта конфига._
   * _Новые ключи – добавляет вместе со значением, независимо от параметра `sync_value`._
